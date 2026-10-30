@@ -75,11 +75,31 @@ if (reviewList && reviewNav) {
     if (counter) counter.textContent = `${page + 1} / ${pageCount()}`;
   };
 
+  // Stała wysokość karuzeli: lista dostaje min-height równą najwyższej stronie,
+  // więc przy przełączaniu stron nic pod nią nie skacze. Siatka rozciąga wtedy
+  // niższe recenzje, żeby ramki na każdej stronie miały tę samą wysokość.
+  const reserveHeight = () => {
+    reviewList.style.minHeight = '';
+    if (pageCount() <= 1) return;
+    let tallest = 0;
+    for (let p = 0; p < pageCount(); p++) {
+      items.forEach((item, i) => { item.hidden = Math.floor(i / perPage) !== p; });
+      tallest = Math.max(tallest, reviewList.offsetHeight);
+    }
+    show(page);   // przywróć bieżącą stronę (pomiar dzieje się przed odświeżeniem ekranu)
+    reviewList.style.minHeight = `${tallest}px`;
+  };
+
   const build = () => {
     const firstVisible = page * perPage;   // zachowaj mniej więcej pozycję przy zmianie szerokości
     perPage = columns();
     reviewNav.replaceChildren();
-    if (pageCount() <= 1) { items.forEach((item) => { item.hidden = false; }); reviewNav.hidden = true; return; }
+    if (pageCount() <= 1) {
+      items.forEach((item) => { item.hidden = false; });
+      reviewNav.hidden = true;
+      reviewList.style.minHeight = '';
+      return;
+    }
 
     reviewNav.append(navButton('Poprzednie recenzje', '‹', () => show(page - 1)));
     if (pageCount() <= 5) {
@@ -99,8 +119,21 @@ if (reviewList && reviewNav) {
     reviewNav.append(navButton('Następne recenzje', '›', () => show(page + 1)));
     reviewNav.hidden = false;
     show(Math.floor(firstVisible / perPage));
+    reserveHeight();
   };
 
   build();
-  window.addEventListener('resize', () => { if (columns() !== perPage) build(); });
+
+  // Wysokość tekstu zmienia się też przy zmianie szerokości (bez zmiany liczby
+  // kolumn) i po doładowaniu fontów, więc wtedy mierzymy ponownie.
+  let resizeFrame = 0;
+  window.addEventListener('resize', () => {
+    cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(() => {
+      if (columns() !== perPage) build();
+      else reserveHeight();
+    });
+  });
+  document.fonts?.ready.then(reserveHeight);
+  window.addEventListener('load', reserveHeight);
 }
